@@ -1,6 +1,8 @@
 #include "driver/i2s.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_log.h"
 
 //#include "485802__grez1__scream14.h"
 #include "132806__nanakisan__evil-laugh-12.h"
@@ -15,6 +17,10 @@ extern const signed char samples[];  // Your PCM audio data
 #define I2S_BCK_IO      (37) // I2S Bit Clock
 #define I2S_WS_IO       (33) // I2S Word Select (LR Clock)
 #define I2S_DO_IO       (34) // I2S Data Out
+
+#define PIR_IO          (38) // Motion Sensor Data
+#define RGB_IO          (39) // RGB Data
+
 
 void i2s_init() {
     // I2S driver configuration
@@ -45,6 +51,17 @@ void i2s_init() {
     i2s_set_clk(I2S_NUM, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_MONO);
 }
 
+// Function to initialize the PIR sensor
+void init_pir_sensor() {
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_DISABLE;   // Disable interrupts for now
+    io_conf.mode = GPIO_MODE_INPUT;          // Set as input mode
+    io_conf.pin_bit_mask = (1ULL << PIR_IO); // Bit mask for the PIR pin
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&io_conf);                   // Configure the GPIO with the settings
+}
+
 void play_audio() {
     int i = 0;
     int16_t sample16;
@@ -61,11 +78,35 @@ void play_audio() {
     }
 }
 
+
+void pir_task(void *pvParameter) {
+    int pir_state = 0;
+
+    while (1) {
+        // Read the state of the PIR sensor
+        pir_state = gpio_get_level(PIR_IO);
+
+        if (pir_state == 1) {
+            // Motion detected, play the sound
+            ESP_LOGI("PIR_TASK", "Motion detected! Playing sound...");
+            play_audio();
+        }
+
+        // Small delay to prevent rapid polling
+        vTaskDelay(1000 / portTICK_PERIOD_MS);  
+    }
+}
+
 void app_main() {
+
     // Initialize I2S
     i2s_init();
 
-    // Start playing the audio
-    play_audio();
+    // Initialize the PIR sensor
+    init_pir_sensor();
+
+    // Create a FreeRTOS task to watch for motion
+    xTaskCreate(&pir_task, "pir_task", 2048, NULL, 5, NULL);
+
 }
 
