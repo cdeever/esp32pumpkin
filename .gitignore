@@ -4,6 +4,7 @@
 .vscode/
 sdkconfig
 sdkconfig.old
+/managed_components
 
 # Ignore CMake generated files
 CMakeFiles/
