@@ -4,6 +4,8 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 
+#include "neopixel.h"
+
 //#include "485802__grez1__scream14.h"
 #include "132806__nanakisan__evil-laugh-12.h"
 
@@ -62,7 +64,7 @@ void init_pir_sensor() {
     gpio_config(&io_conf);                   // Configure the GPIO with the settings
 }
 
-void play_audio() {
+void play_audio(void *pvParameter) {
     int i = 0;
     int16_t sample16;
     size_t bytes_written;
@@ -76,11 +78,13 @@ void play_audio() {
 
         i++;
     }
+    vTaskDelete(NULL);
 }
 
 
 void pir_task(void *pvParameter) {
     int pir_state = 0;
+    led_strip_handle_t led_strip = neopixel_init();
 
     while (1) {
         // Read the state of the PIR sensor
@@ -89,11 +93,13 @@ void pir_task(void *pvParameter) {
         if (pir_state == 1) {
             // Motion detected, play the sound
             ESP_LOGI("PIR_TASK", "Motion detected! Playing sound...");
-            play_audio();
+            xTaskCreate(play_audio, "play_audio", 2048, NULL, 5, NULL);
+            vTaskDelay(800 / portTICK_PERIOD_MS);  // todo - fix this kludge
+            show_lights(led_strip);
         }
 
         // Small delay to prevent rapid polling
-        vTaskDelay(1000 / portTICK_PERIOD_MS);  
+        vTaskDelay(4000 / portTICK_PERIOD_MS);  
     }
 }
 
@@ -104,6 +110,8 @@ void app_main() {
 
     // Initialize the PIR sensor
     init_pir_sensor();
+
+    neopixel_init(39, 2);
 
     // Create a FreeRTOS task to watch for motion
     xTaskCreate(&pir_task, "pir_task", 2048, NULL, 5, NULL);

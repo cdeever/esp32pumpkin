@@ -2,13 +2,16 @@
 
 #include <stdio.h>
 #include "driver/rmt.h"
-#include "led_strip.h"
-#include "led_strip_interface.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#define NUM_LEDS 10  // We're using 10 LEDs
+#include "esp_log.h"
+#include "esp_err.h"
 
+#include "neopixel.h"
+
+#define NUM_LEDS 10  // We're using 10 LEDs
 
 #define LED_STRIP_GPIO_PIN    18     // GPIO pin where the NeoPixel string is connected
 #define LED_STRIP_NUM_LEDS    10     // Number of LEDs in your NeoPixel string
@@ -16,41 +19,50 @@
 static led_strip_t *strip = NULL;
 
 // Initialize the NeoPixel LED strip with the given GPIO pin and brightness
-void neopixel_init(gpio_num_t gpio_pin, uint8_t brightness) {
-    // Initialize the RMT TX channel
-    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(gpio_pin, RMT_CHANNEL_0);
-    config.clk_div = 2;  // RMT clock divider
-    rmt_config(&config);
-    rmt_driver_install(RMT_CHANNEL_0, 0, 0);
+led_strip_handle_t neopixel_init() {
+//gpio_num_t gpio_pin, uint8_t brightness
 
-    // Configuration for the LED strip (NeoPixel string)
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = LED_STRIP_GPIO_PIN, // Pin connected to the NeoPixel string
-        .max_leds = LED_STRIP_NUM_LEDS        // Number of LEDs in the NeoPixel string
-    };
+led_strip_handle_t led_strip;
 
-    // Install the LED strip driver for NeoPixels
-//    strip = led_strip_new_rmt_ws2812(&strip_config);
+/* LED strip initialization with the GPIO and pixels number*/
+led_strip_config_t strip_config = {
+    .strip_gpio_num = 39, // The GPIO that connected to the LED strip's data line
+    .max_leds = 10, // The number of LEDs in the strip,
+    .led_pixel_format = LED_PIXEL_FORMAT_GRB, // Pixel format of your LED strip
+    .led_model = LED_MODEL_WS2812, // LED strip model
+    .flags.invert_out = false, // whether to invert the output signal (useful when your hardware has a level inverter)
+};
 
-//led_strip_new_rmt_device(strip_config, config, strip);
+led_strip_rmt_config_t rmt_config = {
+    .clk_src = RMT_CLK_SRC_DEFAULT, // different clock source can lead to different power consumption
+    .resolution_hz = 10 * 1000 * 1000, // 10MHz
+    .flags.with_dma = false, // whether to enable the DMA feature
+};
+ESP_ERROR_CHECK(led_strip_new_rmt_device(&strip_config, &rmt_config, &led_strip));
 
+  return led_strip;
 
-    // Initialize the string with zero brightness (off)
- //   led_strip_clear(strip);
-
-
-    // Install the WS2812 driver (for NeoPixel)
- //   strip = led_strip_init(RMT_CHANNEL_0, NUM_LEDS);
- //   strip->clear(strip, 50);  // Clear all LEDs
-
-    // Set the global brightness level for the LEDs
-//    strip->set_brightness(strip, brightness);
 }
 
-// Set the color of a specific LED (by index) using RGB values
-void neopixel_set_color(int index, uint8_t r, uint8_t g, uint8_t b) {
-//    if (strip != NULL && index >= 0 && index < NUM_LEDS) {
-//        strip->set_pixel(strip, index, r, g, b);
- //       strip->refresh(strip, 100);  // Update the LED strip with new data
-//    }
+
+void show_lights(led_strip_handle_t led_strip) {
+ 
+    int blink_duration = 50;  // Blink on/off every 200 milliseconds (adjust for speed)
+    int total_blinks = 3000 / (2 * blink_duration);  // Total number of blinks in 3 seconds (on + off counts as one blink)
+
+    for (int i = 0; i < total_blinks; i++) {
+        // Turn the LEDs on with low brightness (white color)
+        for (int j = 0; j < 10; j++) {
+            ESP_ERROR_CHECK(led_strip_set_pixel(led_strip, j, 5, 5, 5));  // Low brightness white
+        }
+        ESP_ERROR_CHECK(led_strip_refresh(led_strip));  // Send data to the LED strip
+ 
+        vTaskDelay(pdMS_TO_TICKS(blink_duration));  // Wait for blink_duration (200 ms)
+
+        // Turn the LEDs off
+        ESP_ERROR_CHECK(led_strip_clear(led_strip));  // Turn off all LEDs
+        ESP_ERROR_CHECK(led_strip_refresh(led_strip));  // Refresh the strip
+ 
+        vTaskDelay(pdMS_TO_TICKS(blink_duration));  // Wait for blink_duration (200 ms)
+    }
 }
